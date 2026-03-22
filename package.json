@@ -1,0 +1,13 @@
+{
+  "name": "elysia-vercel-proxy",
+  "version": "1.0.0",
+  "description": "Vercel Edge Function proxy for Elysia Telegram bot (Plan B)",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
