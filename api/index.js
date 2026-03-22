@@ -5,28 +5,21 @@ export const config = {
 export default async function handler(request) {
   const url = new URL(request.url);
 
-  // Environment Variables dari Vercel Dashboard
-  const HF_SPACE_URL = process.env.HF_SPACE_URL;   // https://mark421-zeroclaw.hf.space
-  const SECRET_PATH  = process.env.SECRET_PATH;    // /wh-rahasia-zeroclaw-2026
-  const SECRET_TOKEN = process.env.SECRET_TOKEN;   // TokenRahasiaAnda123!
+  const HF_SPACE_URL = process.env.HF_SPACE_URL;
+  const SECRET_PATH  = process.env.SECRET_PATH;
+  const SECRET_TOKEN = process.env.SECRET_TOKEN;
 
-  // ── FIX: Strip prefix /api karena file ini di-mount Vercel di /api/* ──
-  // url.pathname saat dipanggil = /api/wh-... atau /api/bot/...
-  // Kita strip /api agar routing bisa dibandingkan dengan benar
-  const pathname = url.pathname.replace(/^\/api/, '') || '/';
+  // Path dikirim sebagai query param: ?path=/bot.../getUpdates
+  // Ini lebih reliable daripada catch-all routing Vercel
+  const pathname = url.searchParams.get('path') || '/';
 
-  // ── 1. INBOUND: Telegram → Vercel → Hugging Face ─────────────
-  // Telegram hit: https://elysia-vercel-proxy1.vercel.app/api/wh-rahasia-zeroclaw-2026
-  // pathname setelah strip → /wh-rahasia-zeroclaw-2026  ✅ match SECRET_PATH
+  // ── INBOUND: Telegram → Vercel → HF Space ─────────────────
   if (pathname.startsWith(SECRET_PATH)) {
     const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (secretToken !== SECRET_TOKEN) {
-      return new Response('Access Denied: Invalid Token', { status: 403 });
+      return new Response('Forbidden', { status: 403 });
     }
-
-    // FIX: Forward ke /webhook (endpoint ZeroClaw), bukan ke url.pathname
-    // ZeroClaw menerima update Telegram di /webhook, bukan di secret path
-    const hfUrl = HF_SPACE_URL + '/webhook';
+    const hfUrl = HF_SPACE_URL + pathname;
     return fetch(hfUrl, {
       method: request.method,
       headers: request.headers,
@@ -34,11 +27,13 @@ export default async function handler(request) {
     });
   }
 
-  // ── 2. OUTBOUND: Hugging Face → Vercel → Telegram API ────────
-  // ZeroClaw memanggil: https://elysia-vercel-proxy1.vercel.app/api/bot<TOKEN>/sendMessage
-  // pathname setelah strip → /bot<TOKEN>/sendMessage  ✅ match
+  // ── OUTBOUND: HF → Vercel → Telegram API ──────────────────
   if (pathname.startsWith('/bot') || pathname.startsWith('/file/bot')) {
-    const tgUrl = 'https://api.telegram.org' + pathname + url.search;
+    // Rebuild query string tanpa 'path' param
+    const tgParams = new URLSearchParams(url.search);
+    tgParams.delete('path');
+    const qs = tgParams.toString() ? '?' + tgParams.toString() : '';
+    const tgUrl = 'https://api.telegram.org' + pathname + qs;
     return fetch(tgUrl, {
       method: request.method,
       headers: request.headers,
@@ -46,5 +41,5 @@ export default async function handler(request) {
     });
   }
 
-  return new Response('Endpoint Not Found', { status: 404 });
+  return new Response('Not Found. Use ?path=/bot.../method or ?path=' + SECRET_PATH, { status: 404 });
 }
