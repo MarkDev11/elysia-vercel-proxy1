@@ -41,4 +41,4 @@ export default async function handler(request) {
   }
 
   return new Response('Endpoint Not Found', { status: 404 });
-}
+  }
